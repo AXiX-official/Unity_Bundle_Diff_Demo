@@ -1,0 +1,14 @@
+bin/
+obj/
+/packages/
+riderModule.iml
+/_ReSharper.Caches/
+.venv/
+HDiffPatch/
+.idea/
+testdata/
+!testdata/old.csv
+!testdata/new.csv
+!testdata/hdiffz.exe
+*.py
+!run_test.py
