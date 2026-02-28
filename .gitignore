@@ -12,3 +12,4 @@ testdata/
 !testdata/hdiffz.exe
 *.py
 !run_test.py
+!download_testdata.py
