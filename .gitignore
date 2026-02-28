@@ -6,7 +6,7 @@ riderModule.iml
 .venv/
 HDiffPatch/
 .idea/
-testdata/
+testdata/*
 !testdata/old.csv
 !testdata/new.csv
 !testdata/hdiffz.exe
