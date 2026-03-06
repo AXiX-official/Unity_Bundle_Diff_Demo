@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using BundleDiffPatch.Runtime;
 using UnityAsset.NET;
@@ -23,6 +24,11 @@ public class PatchDemoUI : MonoBehaviour
 
     private bool _isApplying;
     private Stopwatch _stopwatch;
+    
+    // 进度更新缓存 (从后台线程写入, 主线程读取)
+    private volatile float _pendingProgress;
+    private volatile string _pendingStatus = "";
+    private volatile bool _hasPendingUpdate;
 
     private void Awake()
     {
@@ -46,9 +52,19 @@ public class PatchDemoUI : MonoBehaviour
 
     private void Update()
     {
-        if (_isApplying && _stopwatch.IsRunning && _timeText != null)
+        // 更新时间显示
+        if (_stopwatch.IsRunning && _timeText != null)
         {
             _timeText.text = _stopwatch.Elapsed.ToString(@"hh\:mm\:ss");
+        }
+        
+        // 在主线程中应用挂起的 UI 更新
+        if (_hasPendingUpdate)
+        {
+            _hasPendingUpdate = false;
+            if (_progressSlider != null) _progressSlider.value = _pendingProgress;
+            if (_statusText != null) _statusText.text = _pendingStatus;
+            if (_progressPercentText != null) _progressPercentText.text = $"{(_pendingProgress * 100):F1}%";
         }
     }
 
@@ -81,19 +97,19 @@ public class PatchDemoUI : MonoBehaviour
         // Validation
         if (!Directory.Exists(_baseDir))
         {
-            UpdateUI(0f, $"Base dir not found: {_baseDir}");
+            UpdateUINow(0f, $"Base dir not found: {_baseDir}");
             return;
         }
 
         if (!Directory.Exists(_patchDir))
         {
-            UpdateUI(0f, $"Patch dir not found: {_patchDir}");
+            UpdateUINow(0f, $"Patch dir not found: {_patchDir}");
             return;
         }
 
         if (!File.Exists(manifestPath))
         {
-            UpdateUI(0f, $"manifest.json not found");
+            UpdateUINow(0f, "manifest.json not found");
             return;
         }
 
@@ -102,7 +118,7 @@ public class PatchDemoUI : MonoBehaviour
 
         if (_applyButton != null) _applyButton.interactable = false;
 
-        UpdateUI(0f, "Applying patch...");
+        UpdateUINow(0f, "Applying patch...");
 
         try
         {
@@ -112,13 +128,13 @@ public class PatchDemoUI : MonoBehaviour
             await applier.ApplyAsync(manifestPath, new Progress<LoadProgress>(OnProgress));
 
             _stopwatch.Stop();
-            UpdateUI(1f, "Patch completed!");
+            UpdateUINow(1f, "Patch completed!");
             UnityEngine.Debug.Log($"Patch applied successfully! Time: {_stopwatch.Elapsed}");
         }
         catch (Exception ex)
         {
             _stopwatch.Stop();
-            UpdateUI(0f, $"Error: {ex.Message}");
+            UpdateUINow(0f, $"Error: {ex.Message}");
             UnityEngine.Debug.LogException(ex);
         }
         finally
@@ -130,10 +146,13 @@ public class PatchDemoUI : MonoBehaviour
 
     private void OnProgress(LoadProgress progress)
     {
-        UpdateUI((float)progress.Percentage / 100f, progress.StatusText);
+        // 从后台线程调用, 缓存更新让主线程处理
+        _pendingProgress = (float)progress.Percentage / 100f;
+        _pendingStatus = progress.StatusText;
+        _hasPendingUpdate = true;
     }
 
-    private void UpdateUI(float progress, string status)
+    private void UpdateUINow(float progress, string status)
     {
         if (_progressSlider != null) _progressSlider.value = progress;
         if (_statusText != null) _statusText.text = status;

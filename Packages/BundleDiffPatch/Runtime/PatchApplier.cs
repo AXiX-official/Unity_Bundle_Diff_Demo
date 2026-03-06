@@ -32,41 +32,50 @@ namespace BundleDiffPatch.Runtime
 
         public async Task ApplyAsync(string manifestPath, IProgress<LoadProgress>? progress = null)
         {
-            var manifestJson = await File.ReadAllTextAsync(manifestPath);
-            var manifest = JsonConvert.DeserializeObject<PatchManifest>(manifestJson) ?? throw  new InvalidOperationException();
-
-            var manager = new AssetManager();
-            await manager.LoadDirectoryAsync(_baseDir, progress: progress);
-
-            var operationsByBundle = manifest.Operations.GroupBy(op => op.BundlePath);
-            var totalOperations = manifest.Operations.Count;
-            var currentOperation = 0;
-
-            foreach (var group in operationsByBundle)
+            // 在后台线程执行所有操作
+            await Task.Run(async () =>
             {
-                var bundlePath = group.Key;
-                var operations = group.ToList();
+                var manifestJson = await File.ReadAllTextAsync(manifestPath);
+                var manifest = JsonConvert.DeserializeObject<PatchManifest>(manifestJson) ?? throw new InvalidOperationException();
 
-                progress?.Report(new LoadProgress($"Processing: {bundlePath}", totalOperations, currentOperation));
+                var manager = new AssetManager();
 
-                // 处理 bundle 级别操作
-                var bundleOp = operations.FirstOrDefault(op => op.Type is OperationType.AddBundle or OperationType.DeleteBundle
-                    or OperationType.AddRaw or OperationType.ModifyRaw or OperationType.DeleteRaw);
-                if (bundleOp != null)
+                // 第一阶段：加载文件
+                progress?.Report(new LoadProgress("Loading base files...", 1, 0));
+                await manager.LoadDirectoryAsync(_baseDir, progress: progress);
+                progress?.Report(new LoadProgress("Base files loaded.", 1, 1));
+
+                // 第二阶段：应用操作
+                var operationsByBundle = manifest.Operations.GroupBy(op => op.BundlePath).ToList();
+                var totalOperations = operationsByBundle.Count;
+                var currentOperation = 0;
+
+                foreach (var group in operationsByBundle)
                 {
-                    await ApplyFileLevelOperationAsync(bundleOp);
+                    var bundlePath = group.Key;
+                    var operations = group.ToList();
+
+                    progress?.Report(new LoadProgress($"Processing: {bundlePath}", totalOperations, currentOperation));
+
+                    // 处理 bundle 级别操作
+                    var bundleOp = operations.FirstOrDefault(op => op.Type is OperationType.AddBundle or OperationType.DeleteBundle
+                        or OperationType.AddRaw or OperationType.ModifyRaw or OperationType.DeleteRaw);
+                    if (bundleOp != null)
+                    {
+                        ApplyFileLevelOperation(bundleOp);
+                        currentOperation++;
+                        progress?.Report(new LoadProgress($"Processed: {bundlePath}", totalOperations, currentOperation));
+                        continue;
+                    }
+
+                    ApplyBundleOperations(bundlePath, operations, manager);
                     currentOperation++;
                     progress?.Report(new LoadProgress($"Processed: {bundlePath}", totalOperations, currentOperation));
-                    continue;
                 }
-
-                await ApplyBundleOperationsAsync(bundlePath, operations, manager);
-                currentOperation += operations.Count;
-                progress?.Report(new LoadProgress($"Processed: {bundlePath}", totalOperations, currentOperation));
-            }
+            });
         }
-        
-        private async Task ApplyFileLevelOperationAsync(FileOperation fileOp)
+
+        private void ApplyFileLevelOperation(FileOperation fileOp)
         {
             var outputPath = Path.Combine(_outputDir, fileOp.BundlePath);
 
@@ -85,10 +94,10 @@ namespace BundleDiffPatch.Runtime
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
                     var oldPath = Path.Combine(_baseDir, fileOp.BundlePath);
-                    var oldData = await File.ReadAllBytesAsync(oldPath);
+                    var oldData = File.ReadAllBytes(oldPath);
                     var patchPath = Path.Combine(_patchDir, fileOp.PatchFile!);
                     var newData = ApplyPatch(oldData, patchPath, fileOp.NewSize);
-                    await File.WriteAllBytesAsync(outputPath, newData);
+                    File.WriteAllBytes(outputPath, newData);
                     Console.WriteLine($"{fileOp.Type}: {fileOp.BundlePath}");
                     break;
                 }
@@ -102,8 +111,8 @@ namespace BundleDiffPatch.Runtime
                 }
             }
         }
-        
-        private async Task ApplyBundleOperationsAsync(string bundlePath, List<FileOperation> operations, AssetManager manager)
+
+        private void ApplyBundleOperations(string bundlePath, List<FileOperation> operations, AssetManager manager)
         {
             var bundleFile = FindBundleFile(manager, bundlePath);
             if (bundleFile == null)
@@ -119,12 +128,12 @@ namespace BundleDiffPatch.Runtime
                 switch (fileOp.Type)
                 {
                     case OperationType.Add:
-                        await ApplyAddAsync(bundleFile, fileOp);
+                        ApplyAdd(bundleFile, fileOp);
                         modified = true;
                         break;
 
                     case OperationType.Modify:
-                        await ApplyModifyAsync(bundleFile, fileOp, manager);
+                        ApplyModify(bundleFile, fileOp, manager);
                         modified = true;
                         break;
 
@@ -148,10 +157,10 @@ namespace BundleDiffPatch.Runtime
             }
         }
 
-        private async Task ApplyAddAsync(BundleFile bundleFile, FileOperation fileOp)
+        private void ApplyAdd(BundleFile bundleFile, FileOperation fileOp)
         {
             var dataPath = Path.Combine(_patchDir, fileOp.DataFile!);
-            var newData = await File.ReadAllBytesAsync(dataPath);
+            var newData = File.ReadAllBytes(dataPath);
 
             if (!HashHelper.VerifyHash(newData, fileOp.NewHash!))
             {
@@ -163,14 +172,14 @@ namespace BundleDiffPatch.Runtime
             {
                 throw new InvalidOperationException($"File already exists in bundle: {fileOp.InternalPath}");
             }
-            
+
             var newWrapper = new FileWrapper(new MemoryReaderProvider(newData), new FileEntry(0, 0, 0, fileOp.InternalPath));
             bundleFile.Files.Add(newWrapper);
-            
+
             Console.WriteLine($"Add: {fileOp.InternalPath}");
         }
 
-        private async Task ApplyModifyAsync(BundleFile bundleFile, FileOperation fileOp, AssetManager manager)
+        private void ApplyModify(BundleFile bundleFile, FileOperation fileOp, AssetManager manager)
         {
             var oldFile = manager.LoadedFiles[fileOp.InternalPath];
             var oldData = ExtractData(oldFile);
@@ -183,7 +192,7 @@ namespace BundleDiffPatch.Runtime
             var patchPath = Path.Combine(_patchDir, fileOp.PatchFile!);
 
             var newData = ApplyPatch(oldData, patchPath, fileOp.NewSize);
-            
+
             if (!HashHelper.VerifyHash(newData, fileOp.NewHash!))
             {
                 throw new InvalidOperationException($"New file hash mismatch for {fileOp.InternalPath}");
@@ -196,9 +205,9 @@ namespace BundleDiffPatch.Runtime
             }
 
             var wrapper = bundleFile.Files[index];
-            
+
             bundleFile.Files[index] = new FileWrapper(new MemoryReaderProvider(newData), wrapper.Info);
-            
+
             Console.WriteLine($"Modify: {fileOp.InternalPath}");
         }
 
@@ -209,9 +218,9 @@ namespace BundleDiffPatch.Runtime
             {
                 throw new InvalidOperationException($"File not found in bundle: {fileOp.InternalPath}");
             }
-            
+
             bundleFile.Files.RemoveAt(index);
-            
+
             Console.WriteLine($"Delete: {fileOp.InternalPath}");
         }
 

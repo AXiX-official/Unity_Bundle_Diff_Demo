@@ -31,9 +31,9 @@ namespace Editor
         {
             // 默认使用项目目录下的路径
             var projectPath = Directory.GetParent(Application.dataPath).FullName;
-            _oldBundleDir = Path.Combine(projectPath, "Bundles", "Old");
-            _newBundleDir = Path.Combine(projectPath, "Bundles", "New");
-            _outputDir = Path.Combine(projectPath, "Bundles", "Output");
+            _oldBundleDir = Path.Combine(projectPath, "testdata", "v1");
+            _newBundleDir = Path.Combine(projectPath, "testdata", "v2");
+            _outputDir = Path.Combine(projectPath, "testdata", "diff");
         }
 
         private void OnGUI()
@@ -181,10 +181,10 @@ namespace Editor
                 new Progress<LoadProgress>(p =>
                 {
                     _statusMessage = p.StatusText;
-                    _progress = (float)p.Percentage;
-                }), 
+                    _progress = (float)p.Percentage / 100f;
+                    Repaint();
+                }),
                 TimeSpan.FromMilliseconds(100));
-            Repaint();
 
             try
             {

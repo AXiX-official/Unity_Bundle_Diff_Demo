@@ -675,9 +675,9 @@ MonoBehaviour:
   _statusText: {fileID: 1604138171}
   _timeText: {fileID: 932123000}
   _progressPercentText: {fileID: 391967981}
-  _baseDir: D:\Workspace\csharp\Unity_Bundle_Diff_Demo\testdata\v1
-  _patchDir: D:\Workspace\csharp\Unity_Bundle_Diff_Demo\testdata\diff
-  _outputDir: D:\Workspace\csharp\Unity_Bundle_Diff_Demo\testdata\patched
+  _baseDir: D:\Workspace\Unity\Unity_Bundle_Diff_Demo\testdata\v1
+  _patchDir: D:\Workspace\Unity\Unity_Bundle_Diff_Demo\testdata\diff
+  _outputDir: D:\Workspace\Unity\Unity_Bundle_Diff_Demo\testdata\\patched
 --- !u!1 &1446252588
 GameObject:
   m_ObjectHideFlags: 0

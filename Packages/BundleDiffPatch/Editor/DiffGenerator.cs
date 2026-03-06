@@ -50,7 +50,7 @@ namespace Editor
             var allBundlePaths = newBundleMap.Keys.Union(oldBundleMap.Keys).ToHashSet();
             
             int count = 0;
-            progress?.Report(new LoadProgress(string.Empty, allBundlePaths.Count, count));
+            progress?.Report(new LoadProgress("Generating Patch", allBundlePaths.Count, count));
             
             foreach (var bundlePath in allBundlePaths)
             {
@@ -64,7 +64,7 @@ namespace Editor
 
                 manifest.Operations.AddRange(operations);
                 count++;
-                progress?.Report(new LoadProgress(string.Empty, allBundlePaths.Count, count));
+                progress?.Report(new LoadProgress("Generating Patch", allBundlePaths.Count, count));
             }
         
             manifest.Operations.AddRange(CompareRawFiles(oldMgr, newMgr));
