@@ -1,0 +1,11 @@
+{
+  "name": "top.axix.unityasset.net",
+  "version": "0.1.0",
+  "displayName": "UnityAsset.NET",
+  "description": "UnityAsset.NET",
+  "author": {
+      "name": "AXiX",
+      "email": "axix@mail.ustc.edu.cn",
+      "url": "https://github.com/AXiX-official"
+    }
+}

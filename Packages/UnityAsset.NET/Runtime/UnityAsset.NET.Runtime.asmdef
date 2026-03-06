@@ -1,0 +1,14 @@
+{
+    "name": "UnityAsset.NET.Runtime",
+    "rootNamespace": "UnityAsset.NET",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
